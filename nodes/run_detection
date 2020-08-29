@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+
+import rospy
+
+import rospy
+import message_filters
+from rospy import ServiceException, ROSInterruptException, ROSException
+from lasr_object_detection_yolo.srv import YoloDetection, YoloDetectionRequest, YoloDetectionResponse
+from sensor_msgs.msg import Image, PointCloud2, RegionOfInterest
+from threading import Event, Lock
+
+YOLO_DETECTION_SERVICE = '/yolo_detection'
+
+
+class RunDetection(object):
+    def __init__(self):
+        self.dataset = rospy.get_param('~dataset', 'door_and_handle_custom')
+        self.confidence = rospy.get_param('~confidence', 0.5)
+
+        self.yolo_detection = rospy.ServiceProxy(YOLO_DETECTION_SERVICE, YoloDetection)
+        rospy.wait_for_service(YOLO_DETECTION_SERVICE)
+
+        self.detections = rospy.Publisher('detections', Image, queue_size=10)
+
+        self.cb_event = Event()
+        self.image = Image()
+        self.cloud = PointCloud2()
+
+        image_sub = message_filters.Subscriber('/xtion/rgb/image_rect_color', Image, queue_size=10)
+        depth_sub = message_filters.Subscriber('/xtion/depth_registered/points', PointCloud2, queue_size=10, buff_size=100000000)
+        # sync = message_filters.TimeSynchronizer([image_sub, depth_sub], 1)
+        sync = message_filters.ApproximateTimeSynchronizer([image_sub, depth_sub], queue_size=10, slop=0.01)
+        sync.registerCallback(self.sync_callback)
+
+    def detect_items(self):
+        rospy.loginfo('*' * 30)
+        rospy.loginfo('Detecting items:')
+        try:
+            detect_req = YoloDetectionRequest(image_raw=self.image, dataset=self.dataset, confidence=self.confidence)
+            detect_res = self.yolo_detection(detect_req)
+            self.detections.publish(detect_res.image_bb)
+            for detected_item in detect_res.detected_objects:
+                rospy.loginfo('\tdetected: {}, {}'.format(detected_item.name, detected_item.confidence))
+        except ROSInterruptException:
+            pass
+        except ServiceException as ex:
+            rospy.logwarn('service call failed to {}!'.format(YOLO_DETECTION_SERVICE))
+            rospy.logwarn(ex)
+        except ROSException as ex:
+            rospy.logwarn('timed out waiting for {}!'.format(YOLO_DETECTION_SERVICE))
+            rospy.logwarn(ex)
+
+    def sync_callback(self, image, cloud):
+        rospy.loginfo('in sync_callback')
+        if not self.cb_event.is_set():
+            rospy.loginfo('\tusing image & cloud')
+            self.cb_event.set()
+            self.image = image
+            self.cloud = cloud
+            self.detect_items()
+            self.cb_event.clear()
+
+
+if __name__ == '__main__':
+    rospy.init_node('run_detection')
+
+    detector = RunDetection()
+
+    rospy.spin()

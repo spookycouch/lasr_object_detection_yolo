@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <arg name="dataset" default="door_and_handle_custom"/>
+    <arg name="confidence" default="0.5"/>
+
+    <include file="$(find lasr_object_detection_yolo)/launch/service.launch"></include>
+
+    <node name="run_detection" pkg="lasr_object_detection_yolo" type="run_detection" output="screen">
+        <param name="dataset" value="$(arg dataset)" />
+        <param name="confidence" value="$(arg confidence)" />
+    </node>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find lasr_object_detection_yolo)/config/rviz/detections.rviz">
+    </node>
+</launch>

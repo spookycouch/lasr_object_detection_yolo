@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <node name="lasr_object_detection_yolo" pkg="lasr_object_detection_yolo" type="object_detection_server.py" output="screen" respawn="true">
+    </node>
+</launch>

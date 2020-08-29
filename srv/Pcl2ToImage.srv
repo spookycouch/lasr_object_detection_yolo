@@ -1,0 +1,5 @@
+#image topic to subscribe, confidence for object detection, non-maximum suppression
+sensor_msgs/PointCloud2 depth_points
+---
+#bounding box image for testing, name and coords of each object detected
+sensor_msgs/Image image_bgr
