@@ -23,7 +23,7 @@ from models_python2 import Darknet
 from utils.utils import non_max_suppression
 
 MODEL_ROOT = rospkg.RosPack().get_path('lasr_object_detection_yolo') + '/models/'
-
+from os.path import isdir
 
 def yolo_transform():
     return transforms.Compose([
@@ -36,13 +36,13 @@ class object_detection_server():
         self.bridge = CvBridge()
         self.transform = yolo_transform()
         self.model_name = None
-        self.yolov3 = None
+        self.load_model('coco')
+    
+    def load_model(self, model_name):
+        model_path = MODEL_ROOT + model_name + '/'
 
-    def detect_objects(self, req):
-        # load model if it is not already up
-        if not self.model_name == req.dataset:
-            self.model_name = req.dataset
-            model_path = MODEL_ROOT + self.model_name + '/'
+        if isdir(model_path):
+            self.model_name = model_name
 
             start_time = time.time()
 
@@ -52,12 +52,20 @@ class object_detection_server():
             self.yolov3.eval()
             self.yolov3.to(DEVICE)
         
-            rospy.loginfo('Time to load {} model: {:.2f} seconds'.format(self.model_name, time.time() - start_time))
+            rospy.loginfo('Time to load {} model: {:.2f} seconds'.format(model_name, time.time() - start_time))
+        else:
+            self.model_name = None
+            self.yolov3 = None
+
+    def detect_objects(self, req):
+        # load model if it is not already up
+        if not self.model_name == req.dataset:
+            self.load_model(req.dataset)
 
         assert self.yolov3 is not None
         
         # preprocess
-        frame = self.bridge.imgmsg_to_cv2(req.image_raw, 'rgb8') # opencv messages are bgr - we want rgb
+        frame = self.bridge.imgmsg_to_cv2(req.image_raw, 'rgb8') # opencv images are bgr - we want rgb
         image = PIL_Image.fromarray(frame)
         image = torch.stack([self.transform(image)]).to(DEVICE)
 
